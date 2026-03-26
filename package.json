@@ -1,8 +1,9 @@
 {
   "name": "fantasybatch",
   "version": "1.0.0",
-  "main": "hello.js",
+  "main": "fantasyIngest.js",
   "scripts": {
+    "start": "node fantasyIngest.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",

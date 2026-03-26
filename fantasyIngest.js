@@ -1,20 +1,33 @@
-// Change: import 'dotenv/config'; to configure dotenv for ES Modules
-import 'dotenv/config';
-
-// Change: import serviceAccount from './serviceAccountKey.json';
-import serviceAccount from './serviceAccountKey.json' with { type: 'json' };
-
 import admin from 'firebase-admin'; // Correct ES Module import for firebase-admin
 import axios from 'axios';         // Correct ES Module import for axios
 
 // --- CONFIGURATION ---
-const API_TOKEN = 'gsZEnYqYpLsfVPRhca4EJSSxVnfwJjTxBvX7ZwSx1cv90QHGcA6YnJzaZqf9';
-const SEASON_ID = 25539; // <--- UPDATE THIS WITH YOUR MEXICAN LEAGUE SEASON ID
+const API_TOKEN = process.env.API_TOKEN;
+const SEASON_ID = Number.parseInt(process.env.SEASON_ID ?? '', 10);
 const BASE_URL = 'https://api.sportmonks.com/v3/football';
 
-// --- FIREBASE INIT ---
+function validateConfig() {
+    const missingFields = [];
+
+    if (!API_TOKEN) {
+        missingFields.push('API_TOKEN');
+    }
+
+    if (!Number.isInteger(SEASON_ID)) {
+        missingFields.push('SEASON_ID');
+    }
+
+    if (missingFields.length > 0) {
+        throw new Error(`Missing or invalid configuration: ${missingFields.join(', ')}`);
+    }
+}
+
+validateConfig();
+
+// Uses Application Default Credentials. In Cloud Run, attach a service account
+// to the job. Locally, set GOOGLE_APPLICATION_CREDENTIALS if needed.
 admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.applicationDefault()
 });
 const db = admin.firestore();
 
@@ -23,8 +36,6 @@ const api = axios.create({
     baseURL: BASE_URL,
     timeout: 10000,
 });
-
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function fetchTeamsAndSquads() {
     console.log(`🚀 Starting ingestion for Mexican League Season ID: ${SEASON_ID}`);
@@ -48,7 +59,6 @@ async function fetchTeamsAndSquads() {
 
         console.log(`✅ Found ${teamsData.length} Mexican League teams. Processing...`);
 
-        const batchSize = 400;
         let batch = db.batch();
         let operationCount = 0;
 
@@ -96,7 +106,24 @@ async function fetchTeamsAndSquads() {
         console.log('🎉 Mexican League Ingestion Complete!');
 
     } catch (error) {
-        console.error('❌ Error during ingestion:', error.response ? error.response.data : error.message);
+        if (error.response) {
+            console.error('❌ SportMonks API error:', error.response.data);
+            return;
+        }
+
+        console.error('❌ Ingestion error:', error.message);
+
+        if (error.code) {
+            console.error('Error code:', error.code);
+        }
+
+        if (error.details) {
+            console.error('Error details:', error.details);
+        }
+
+        if (error.stack) {
+            console.error(error.stack);
+        }
     }
 }
 
